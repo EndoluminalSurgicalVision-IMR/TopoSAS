@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "toposas"
+version = "0.1.0"
+description = "Skeleton-free STCL measurement and fixed-budget patch planning for shape-aware sampling"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Yaoyu Liu" },
+    { name = "Minghui Zhang" },
+    { name = "Ziyan Huang" },
+    { name = "You Xin" },
+    { name = "Hanxiao Zhang" },
+    { name = "Yun Gu" },
+]
+dependencies = [
+    "numpy>=1.23",
+    "nibabel>=5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+toposas = "toposas.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["toposas*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

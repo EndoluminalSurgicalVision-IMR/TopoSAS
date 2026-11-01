@@ -1,0 +1,27 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+
+# Build artefacts
+build/
+dist/
+
+# Local data and reports
+data/
+*.nii
+*.nii.gz
+stcl_report.json
+patch_*.json
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
