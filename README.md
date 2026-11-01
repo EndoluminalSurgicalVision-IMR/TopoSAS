@@ -39,9 +39,9 @@ pytest -q
 For each physical axis `i ∈ {x, y, z}` (all lengths in millimetres), STCL is
 
 $$
-M_i = \frac{V\,\Delta_i}{R_i}, \qquad
+M_i = \frac{V \Delta_i}{R_i}, \qquad
 \Sigma_i = \sqrt{\frac{1}{C}\sum_{c}\left(\mu_{c,i}-\bar\mu_i\right)^2}, \qquad
-\boxed{S_i = M_i + \tfrac{1}{3}\Sigma_i}
+S_i = M_i + \frac{1}{3}\Sigma_i
 $$
 
 where `V` is the foreground voxel count, `Δ_i` the voxel spacing, `R_i` the number of foreground runs along axis `i`, `μ_{c,i}` the centroid of class `c`, `C` the set of present semantic classes, and the mean of the class centroids.
@@ -65,22 +65,13 @@ $$
 The continuous target is discretized on the stride-compatible lattice `p_i = m_i d_i`:
 
 $$
-\mathcal{P}_N=\left\{p\in\mathbb{N}_+^3 \;\middle|\; d_i \mid p_i,\;
-\left|\frac{p_xp_yp_z}{N^3}-1\right|\le 0.05\right\},
+\mathcal{P}_N = \left\lbrace p \in \mathbb{N}_+^3 \mid d_i \mid p_i, \quad \left|\frac{p_xp_yp_z}{N^3}-1\right| \le 0.05 \right\rbrace,
 $$
 
 and the selected patch minimizes the pairwise log-ratio objective
 
 $$
-(p_x^\ast,p_y^\ast,p_z^\ast)
-=
-\underset{p\in\mathcal{P}_N}{\arg\min}
-\sum_{i<j}
-\left[
-\log\frac{p_i}{p_j}
--
-\log\frac{\tilde{p}_i}{\tilde{p}_j}
-\right]^2.
+(p_x^\ast,p_y^\ast,p_z^\ast) = \arg\min_{p\in\mathcal{P}_N} \sum_{i<j} \left[ \log\frac{p_i}{p_j} - \log\frac{\tilde{p}_i}{\tilde{p}_j} \right]^2.
 $$
 
 This objective is scale-free: it preserves the axis ratios of the theoretical target rather than its absolute size. Ties are broken by the volume error and then by multiplier order.
