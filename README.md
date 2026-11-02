@@ -2,12 +2,13 @@
 
 Official code for **TopoSAS**, the shape- and semantic-aware patch-size allocation strategy in *TopoSAS: Shape-aware Sampling Matters in the Modeling of Multi-Class Tubular Structures*.
 
-This repository contains the two core components of the method:
+This repository contains the method components and the reference evaluation code:
 
 - **STCL** — a skeleton-free, directional Semantic Tubular Context Length measured directly on semantic label maps;
-- **fixed-budget patch allocation** — the rule that turns STCL into an anisotropic patch while keeping the nominal voxel budget fixed.
+- **fixed-budget patch allocation** — the rule that turns STCL into an anisotropic patch while keeping the nominal voxel budget fixed;
+- **reference evaluation** — Dice (class-average over `GT ∪ Pred`), binary-foreground clDice, and 26-connectivity β0 error.
 
-It is a *planning* module: it changes only `patch_size`. Network architecture, spacing, preprocessing, loss, augmentation, optimizer, and inference stay those of the segmentation framework. Training, inference, and dataset conversion are therefore not re-implemented here; the reference pipeline is nnU-Net v2.
+It is a *planning* module: it changes only `patch_size`. Network architecture, spacing, preprocessing, loss, augmentation, optimizer, and inference stay those of the segmentation framework. The repository provides the patch planner, a thin nnU-Net plan-update/training wrapper, and the reference evaluation code; the training and inference implementation itself remains nnU-Net v2.
 
 ---
 
@@ -22,10 +23,11 @@ TopoSAS keeps the nominal voxel budget `N³` and redistributes it across axes ac
 ```bash
 git clone https://github.com/EndoluminalSurgicalVision-IMR/TopoSAS.git
 cd TopoSAS
-pip install -e .
+pip install -e .            # STCL and patch planning
+pip install -e ".[eval]"    # adds scipy and scikit-image for evaluation
 ```
 
-Dependencies: `numpy`, `nibabel`; Python ≥ 3.9. For development:
+Core dependencies: `numpy`, `nibabel`; evaluation extras: `scipy`, `scikit-image`; Python ≥ 3.9. For development (includes the evaluation dependencies):
 
 ```bash
 pip install -e ".[dev]"
@@ -103,7 +105,7 @@ The published `N = 128` configurations are:
 
 `toposas reproduce` verifies these published `N = 128` patches. The `N = 96` and `N = 160` patches used in the budget sweep are not listed in the paper; `toposas patch --preset ... --budget 96 128 160` generates them with the same rule.
 
-Data: [AortaSeg24](https://aortaseg24.grand-challenge.org/) and [TopBrain25](https://topbrain2025.grand-challenge.org/) are public; Airway-TNN is available upon request.
+Data: [AortaSeg24](https://aortaseg24.grand-challenge.org/) and [TopBrain25](https://topbrain2025.grand-challenge.org/) are public; Airway-TNN is available upon request. Model weights will be released upon acceptance.
 
 ### Measure STCL from label maps
 
@@ -167,9 +169,32 @@ python examples/plan_from_labels.py \
   --budgets 96 128 160
 ```
 
+## Evaluation
+
+```bash
+pip install -e ".[eval]"
+
+toposas evaluate \
+  --pred-dir /path/to/predictions \
+  --gt-dir /path/to/labelsTs \
+  --labels 23 \
+  --workers 4 \
+  --output metrics.json
+```
+
+The evaluator matches prediction and ground-truth NIfTI files by filename stem and supports `.nii` and `.nii.gz` (validated with `scikit-image 0.24.0` and `scipy 1.13.1`). `--labels` is the number of foreground classes (23 for AortaSeg24, 19 for Airway-TNN, 40 for TopBrain25); if omitted, it is inferred from each case.
+
+Metrics follow the paper convention:
+
+- **Dice**: class-average over classes present in `GT ∪ Pred`; classes absent from both are excluded and a class present only in the prediction scores zero.
+- **clDice**: binary foreground, 3-D Lee skeletons, computed over the union bounding box.
+- **β0 Err**: per-class mean absolute difference between the numbers of 26-connected components in prediction and ground truth.
+
+The JSON report contains the per-case metrics, per-class details, and dataset mean ± population standard deviation. NIfTI arrays are evaluated in the same z/y/x orientation as the reference scripts; Dice and β0 are orientation-invariant, while clDice uses 3-D Lee skeletons in that orientation. The evaluator reproduces the reported Table I cells, for example AortaSeg24 cbDice at `N=128`: `75.57 / 97.85 / 0.23`.
+
 ## Adapting to nnU-Net
 
-TopoSAS changes only `patch_size`; everything else follows the nnU-Net plan. The training and evaluation settings are otherwise unchanged from the paper (nnU-Net v2.6.4, PyTorch 2.5.1, fixed random seed, initial learning rate 0.01, up to 2000 epochs). Back up the plan, replace the `patch_size` of the configuration you will train, and use that configuration for training and inference:
+TopoSAS changes only `patch_size`; everything else follows the nnU-Net plan. The training settings are otherwise unchanged from the paper (nnU-Net v2.6.4, PyTorch 2.5.1, fixed random seed, initial learning rate 0.01, up to 2000 epochs). Back up the plan, replace the `patch_size` of the configuration you will train, and use that configuration for training and inference:
 
 ```bash
 cp $nnUNet_preprocessed/DatasetXXX/nnUNetPlans.json \
@@ -193,6 +218,20 @@ nnUNetv2_predict -i INPUT -o OUTPUT -d DATASET_ID -c 3d_fullres -f 0
 
 If the dataset has not been preprocessed yet, run the usual nnU-Net planning and preprocessing first. Existing preprocessed data can be reused when the spacing and `data_identifier` are unchanged; otherwise rerun `nnUNetv2_preprocess`.
 
+For convenience, `scripts/train_with_patch.py` performs the plan update and launches training:
+
+```bash
+python scripts/train_with_patch.py \
+  --dataset 39 \
+  --config 3d_fullres \
+  --patch-size 96 80 272 \
+  --fold 0 \
+  --trainer nnUNetTrainer \
+  --dry-run
+```
+
+The script creates `nnUNetPlans.baseline.json`, writes the new `patch_size`, prints the training command, and starts `nnUNetv2_train` unless `--dry-run` is set.
+
 Notes:
 
 - `patch_size` is in the plan's axis order, not necessarily `(x, y, z)`. The released table is in `x, y, z` order; reorder it if your plan transposes axes.
@@ -207,8 +246,11 @@ toposas/
   stcl.py        # M, Σ, S measurement and dataset aggregation
   patch.py       # fixed-budget patch law and discretization
   presets.py     # released dataset presets and reproduction checks
+  metrics.py     # Dice, binary clDice, 26-connectivity beta0
+  evaluation.py  # directory-level evaluation and JSON report
   cli.py         # `toposas` command line
-tests/           # unit tests, including the reproduction check
+scripts/         # nnU-Net training wrapper
+tests/           # unit tests, including metric and reproduction checks
 examples/        # end-to-end label-folder example
 assets/          # qualitative figure
 ```

@@ -1,9 +1,11 @@
-"""TopoSAS: skeleton-free STCL measurement and fixed-budget patch planning."""
+"""TopoSAS: skeleton-free STCL measurement, patch planning and evaluation."""
 
 from __future__ import annotations
 
 __version__ = "0.1.0"
 
+from .evaluation import evaluate_directories  # noqa: E402
+from .metrics import betti0, cldice, dice, evaluate_pair  # noqa: E402
 from .patch import (  # noqa: E402
     PatchAllocation,
     fit_patch,
@@ -36,6 +38,11 @@ __all__ = [
     "STCLMeasurement",
     "__version__",
     "aggregate_measurements",
+    "betti0",
+    "cldice",
+    "dice",
+    "evaluate_directories",
+    "evaluate_pair",
     "fit_patch",
     "fit_patches",
     "measure_label",

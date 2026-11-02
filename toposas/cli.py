@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Sequence
 
 from . import __version__
+from .evaluation import evaluate_directories, write_report
 from .patch import fit_patch
 from .presets import PRESETS, reproduce_all, reproduce_preset
 from .stcl import aggregate_measurements, measure_nifti
@@ -139,10 +140,32 @@ def _cmd_reproduce(args: argparse.Namespace) -> int:
     return 0 if report["all_match"] else 1
 
 
+def _cmd_evaluate(args: argparse.Namespace) -> int:
+    report = evaluate_directories(
+        args.pred_dir,
+        args.gt_dir,
+        n_labels=args.labels,
+        workers=args.workers,
+        check_affine=not args.ignore_affine,
+    )
+    summary = report["summary"]
+    print(
+        f"cases={report['num_cases']} "
+        f"Dice={summary['dice']:.4f}±{summary['dice_std']:.4f} "
+        f"clDice={summary['clDice']:.4f}±{summary['clDice_std']:.4f} "
+        f"beta0={summary['betti0']:.4f}±{summary['betti0_std']:.4f}"
+    )
+    if args.output is not None:
+        write_report(report, args.output)
+    else:
+        print(json.dumps(report, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="toposas",
-        description="STCL measurement and fixed-budget patch planning for TopoSAS.",
+        description="STCL measurement, fixed-budget patch planning and evaluation for TopoSAS.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -175,6 +198,26 @@ def build_parser() -> argparse.ArgumentParser:
     patch.add_argument("--window", type=float, default=0.05)
     patch.add_argument("--output", type=Path)
     patch.set_defaults(func=_cmd_patch)
+
+    evaluate = subparsers.add_parser(
+        "evaluate", help="Evaluate prediction masks with Dice, clDice and beta0."
+    )
+    evaluate.add_argument("--pred-dir", required=True, type=Path)
+    evaluate.add_argument("--gt-dir", required=True, type=Path)
+    evaluate.add_argument(
+        "--labels",
+        type=int,
+        default=None,
+        help="Number of foreground classes (default: infer from the masks).",
+    )
+    evaluate.add_argument("--workers", type=int, default=1)
+    evaluate.add_argument(
+        "--ignore-affine",
+        action="store_true",
+        help="Do not require prediction and ground truth affines to match.",
+    )
+    evaluate.add_argument("--output", type=Path)
+    evaluate.set_defaults(func=_cmd_evaluate)
 
     reproduce = subparsers.add_parser(
         "reproduce", help="Check the published N=128 patches."
